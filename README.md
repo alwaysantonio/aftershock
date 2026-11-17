@@ -14,6 +14,7 @@ The upstream API is rate-limited, capped at 20,000 results per query, and revise
 - Infra related to the project (docker, docker-compose, makefile, etc.)
 - New to Celery, so I used Claude to help me understand how to use it and how to write tasks.
 - Summarising the USGS earthquake data source and its quirks
+- Parsing of the data and writing the upsert logic to handle revisions and deletions
 - Creating the query plans docs/query-plans.md **[docs/query-plans.md](docs/query-plans.md)**
 - Discussing the benefits of using a watermark for the sync rather than `SELECT MAX(updated)` from the table.
 - Discussing the benefits of using raw SQL for the upsert rather than Django's `bulk_create(update_conflicts=True)`.

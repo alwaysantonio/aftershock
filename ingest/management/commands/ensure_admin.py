@@ -36,7 +36,6 @@ class Command(BaseCommand):
                 user.set_password(password)
                 user.save(update_fields=["password"])
             if token:
-                # The token key is the primary key, so replace rather than update it.
                 Token.objects.filter(user=user).exclude(key=token).delete()
                 Token.objects.get_or_create(user=user, key=token)
 

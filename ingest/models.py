@@ -33,7 +33,7 @@ class IngestWindow(models.Model):
     inserted = models.PositiveIntegerField(default=0)
     updated_count = models.PositiveIntegerField(
         default=0
-    )  # rows replaced by a newer version
+    )
     rejected = models.PositiveIntegerField(default=0)
 
     last_error = models.TextField(blank=True)
@@ -53,7 +53,6 @@ class IngestWindow(models.Model):
             ),
         ]
         indexes = [
-            # "Which windows still need work?"
             models.Index(
                 fields=["status", "start"],
                 condition=~Q(status=WindowStatus.SUCCEEDED.value),

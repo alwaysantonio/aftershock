@@ -34,7 +34,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             services.bootstrap(
                 backfill_days=0, if_empty=False
-            )  # make sure the sync bookmark exists
+            )
             ids = services.create_windows(start, end)
             enqueue_windows(ids)
         self.stdout.write(

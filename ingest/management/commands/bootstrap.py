@@ -19,7 +19,7 @@ class Command(BaseCommand):
     def handle(self, *, backfill_days, if_empty, **_):
         with transaction.atomic():
             ids = services.bootstrap(backfill_days=backfill_days, if_empty=if_empty)
-            enqueue_windows(ids)  # sent once the transaction commits
+            enqueue_windows(ids)
         self.stdout.write(
             self.style.SUCCESS(f"Bootstrap done; {len(ids)} backfill windows queued.")
         )
