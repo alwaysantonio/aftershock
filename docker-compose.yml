@@ -1,0 +1,92 @@
+x-app: &app
+  build: .
+  restart: unless-stopped
+  volumes:
+    - .:/app
+    - /app/.venv
+  environment: &app_env
+    DATABASE_URL: postgres://${POSTGRES_USER:-aftershock}:${POSTGRES_PASSWORD:-aftershock}@db:5432/${POSTGRES_DB:-aftershock}
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/0
+    DEBUG: ${DEBUG:-1}
+    SECRET_KEY: ${SECRET_KEY:-django-insecure-dev-key}
+    ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+    CACHE_URL: redis://redis:6379/1
+    DJANGO_ADMIN_PASSWORD: ${DJANGO_ADMIN_PASSWORD:-admin}
+    DJANGO_ADMIN_TOKEN: ${DJANGO_ADMIN_TOKEN:-dev-admin-token}
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"   # handy for running EXPLAIN ANALYZE from your machine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aftershock}
+      POSTGRES_USER: ${POSTGRES_USER:-aftershock}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aftershock}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aftershock} -d ${POSTGRES_DB:-aftershock}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: migrations run once here, so web/worker/beat never race each other.
+  # bootstrap creates the sync bookmark and queues a 30-day backfill if the DB is empty.
+  migrate:
+    <<: *app
+    restart: "no"
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py ensure_admin &&
+             python manage.py bootstrap --backfill-days 30 --if-empty"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    command: >
+      gunicorn config.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers 3
+      --timeout 30
+      --reload
+      --access-logfile -
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "config", "worker", "-l", "info", "--concurrency", "4"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Triggers the sync every SYNC_INTERVAL_SECONDS. Schedule state goes to /tmp
+  # so beat doesn't write a celerybeat-schedule file into your bind-mounted repo.
+  beat:
+    <<: *app
+    command: ["celery", "-A", "config", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
